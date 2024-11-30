@@ -23,65 +23,50 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { Product } from "@/db/schema";
+import { addProduct, deleteProduct } from "@/queries/products";
 
-interface Product {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  stock: number;
-}
-
-export default function CleaningProducts() {
-  const [products, setProducts] = useState<Product[]>([
-    {
-      id: "1",
-      name: "All-Purpose Cleaner",
-      description: "Effective for multiple surfaces",
-      price: 9.99,
-      stock: 50,
-    },
-  ]);
+export default function CleaningProducts({
+  products,
+}: {
+  products: Product[];
+}) {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState<null | number>(null);
+
   const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const test = async (e: any) => {
     e.preventDefault();
+
     const formData = new FormData(e.currentTarget);
-    const newProduct = {
-      id: editingProduct?.id || Math.random().toString(36).substr(2, 9),
+    const product = {
+      id: editingProduct?.id,
       name: formData.get("name") as string,
       description: formData.get("description") as string,
       price: parseFloat(formData.get("price") as string),
       stock: parseInt(formData.get("stock") as string),
     };
 
-    if (editingProduct) {
-      setProducts(products.map((p) => (p.id === editingProduct.id ? newProduct : p)));
+    await addProduct(product);
+
+    if (product.id) {
       toast({
         title: "Produto atualizado",
-        description: `${newProduct.name} foi atualizado com sucesso.`,
+        description: `${product.name} foi atualizado com sucesso.`,
       });
     } else {
-      setProducts([...products, newProduct]);
       toast({
         title: "Produto adicionado",
-        description: `${newProduct.name} foi adicionado com sucesso.`,
+        description: `${product.name} foi adicionado com sucesso.`,
       });
     }
 
     setEditingProduct(null);
     (e.target as HTMLFormElement).reset();
-  };
-
-  const deleteProduct = (id: string) => {
-    const product = products.find((p) => p.id === id);
-    setProducts(products.filter((p) => p.id !== id));
-    toast({
-      title: "Produto excluído",
-      description: `${product?.name} foi excluído com sucesso.`,
-      variant: "destructive",
-    });
+    setModalOpen(false);
+    setEditModalOpen(null);
   };
 
   return (
@@ -89,13 +74,16 @@ export default function CleaningProducts() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-7">
           <CardTitle className="text-2xl font-bold flex items-center gap-2">
-            <SprayCan className="h-6 w-6" />  
+            <SprayCan className="h-6 w-6" />
             Inventário de produtos de limpeza
           </CardTitle>
-          <Dialog>
+          <Dialog open={modalOpen} onOpenChange={setModalOpen}>
             <DialogTrigger asChild>
               <Button
-                onClick={() => setEditingProduct(null)}
+                onClick={() => {
+                  setEditingProduct(null);
+                  setModalOpen(true);
+                }}
                 className="bg-primary hover:bg-primary/90"
               >
                 <Plus className="mr-2 h-4 w-4" />
@@ -108,7 +96,7 @@ export default function CleaningProducts() {
                   {editingProduct ? "Editar produto" : "Adicionar novo produto"}
                 </DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={test} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Nome</Label>
                   <Input
@@ -148,7 +136,7 @@ export default function CleaningProducts() {
                       type="number"
                       min="0"
                       required
-                      defaultValue={editingProduct?.stock}
+                      defaultValue={editingProduct?.stock ?? 0}
                     />
                   </div>
                 </div>
@@ -178,12 +166,20 @@ export default function CleaningProducts() {
                   <TableCell>${product.price.toFixed(2)}</TableCell>
                   <TableCell>{product.stock}</TableCell>
                   <TableCell className="text-right space-x-2">
-                    <Dialog>
+                    <Dialog
+                      open={editModalOpen === product.id}
+                      onOpenChange={(open) =>
+                        setEditModalOpen(open ? product.id : null)
+                      }
+                    >
                       <DialogTrigger asChild>
                         <Button
                           variant="outline"
                           size="icon"
-                          onClick={() => setEditingProduct(product)}
+                          onClick={() => {
+                            setEditingProduct(product);
+                            setEditModalOpen(product.id);
+                          }}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -192,7 +188,7 @@ export default function CleaningProducts() {
                         <DialogHeader>
                           <DialogTitle>Editar produto</DialogTitle>
                         </DialogHeader>
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                        <form onSubmit={test} className="space-y-4">
                           <div className="space-y-2">
                             <Label htmlFor="name">Nome</Label>
                             <Input
@@ -232,7 +228,7 @@ export default function CleaningProducts() {
                                 type="number"
                                 min="0"
                                 required
-                                defaultValue={product.stock}
+                                defaultValue={product.stock ?? 0}
                               />
                             </div>
                           </div>
@@ -245,7 +241,15 @@ export default function CleaningProducts() {
                     <Button
                       variant="destructive"
                       size="icon"
-                      onClick={() => deleteProduct(product.id)}
+                      onClick={() => {
+                        deleteProduct(product.id).then(() => {
+                          toast({
+                            title: "Produto excluído",
+                            description: `${product?.name} foi excluído com sucesso.`,
+                            variant: "destructive",
+                          });
+                        });
+                      }}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
